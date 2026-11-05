@@ -139,7 +139,7 @@ def creer_url_verification(numero_certificat):
     parametres = dict(parse_qsl(url.query, keep_blank_values=True))
     parametres.update(
         page="Vérifier",
-        numero_certificat=numero_certificat,
+        certificat=numero_certificat,
     )
     return urlunsplit(
         (url.scheme, url.netloc, url.path, urlencode(parametres), "")
@@ -282,9 +282,50 @@ def generer_certificat(resultat):
     return bytes(pdf.output())
 
 
+def rechercher_depot_verification(valeur, par_empreinte=False):
+    colonne = "empreinte" if par_empreinte else "numero_certificat"
+    connexion = sqlite3.connect(REGISTRE_DB, timeout=10)
+    try:
+        return connexion.execute(
+            f"""
+            SELECT numero_certificat, date_utc, artiste, titre, ia_utilisee,
+                   etapes_ia
+            FROM depots
+            WHERE {colonne} = ?
+            """,
+            (valeur,),
+        ).fetchone()
+    finally:
+        connexion.close()
+
+
+def afficher_resultat_verification(depot):
+    if depot is None:
+        st.caption("Aucun enregistrement trouvé")
+        return
+
+    st.success("Fichier enregistré")
+    st.write(f"**Numéro de certificat :** {depot[0]}")
+    st.write(f"**Date UTC :** {depot[1]}")
+    st.write(f"**Artiste :** {depot[2]}")
+    st.write(f"**Titre :** {depot[3]}")
+    if depot[4] == "oui":
+        declaration_ia = (
+            f"IA utilisée — {depot[5]}"
+            if depot[5]
+            else "IA utilisée, aucune étape précisée"
+        )
+    else:
+        declaration_ia = "Aucune IA déclarée"
+    st.write(f"**Déclaration IA :** {declaration_ia}")
+
+
 st.set_page_config(page_title="Truetone")
 
-numero_certificat_url = st.query_params.get("numero_certificat", "")
+numero_certificat_url = (
+    st.query_params.get("certificat", "")
+    or st.query_params.get("numero_certificat", "")
+)
 page_demandee = st.query_params.get("page")
 if "navigation_page" not in st.session_state:
     if page_demandee in ("Déposer", "Vérifier"):
@@ -407,38 +448,31 @@ if page == "Déposer":
                         key=f"telecharger_{resultat['numero_certificat']}",
                     )
 elif page == "Vérifier":
+    st.subheader("Par numéro de certificat")
     numero_certificat = st.text_input(
         "Numéro du certificat",
         value=numero_certificat_url,
     ).strip()
     if numero_certificat:
         try:
-            with sqlite3.connect(REGISTRE_DB, timeout=10) as connexion:
-                depot = connexion.execute(
-                    """
-                    SELECT artiste, titre, nom_fichier, empreinte, date_utc,
-                           ia_utilisee, etapes_ia
-                    FROM depots
-                    WHERE numero_certificat = ?
-                    """,
-                    (numero_certificat,),
-                ).fetchone()
+            depot = rechercher_depot_verification(numero_certificat)
         except sqlite3.Error as erreur:
             st.error(f"Impossible de vérifier le certificat : {erreur}")
         else:
-            if depot is None:
-                st.error("Aucun dépôt ne correspond à ce numéro de certificat.")
-            else:
-                st.success("Certificat vérifié : dépôt trouvé dans le registre.")
-                st.write(f"**Artiste :** {depot[0]}")
-                st.write(f"**Morceau :** {depot[1]}")
-                st.write(f"**Fichier :** {depot[2]}")
-                st.write(f"**Date UTC :** {depot[4]}")
-                st.write(
-                    f"**Utilisation de l'IA :** "
-                    f"{'Oui' if depot[5] == 'oui' else 'Non'}"
-                )
-                if depot[5] == "oui":
-                    st.write(f"**Étapes déclarées :** {depot[6] or 'Aucune'}")
-                st.write("**Empreinte SHA-256 :**")
-                st.code(depot[3])
+            afficher_resultat_verification(depot)
+
+    st.divider()
+    st.subheader("Par fichier")
+    fichier_a_verifier = st.file_uploader(
+        "Choisissez un fichier à vérifier",
+        type=["mp3", "wav", "flac", "aiff", "zip", "pdf"],
+        key="fichier_a_verifier",
+    )
+    if fichier_a_verifier is not None:
+        try:
+            empreinte = calculer_empreinte(fichier_a_verifier)
+            depot = rechercher_depot_verification(empreinte, par_empreinte=True)
+        except (OSError, sqlite3.Error) as erreur:
+            st.error(f"Impossible de vérifier le fichier : {erreur}")
+        else:
+            afficher_resultat_verification(depot)

@@ -6,6 +6,10 @@ et enregistre chaque dépôt dans `registre.db`. Une empreinte déjà enregistr�
 n'est pas ajoutée une seconde fois : l'application affiche alors le certificat
 et la date du dépôt existant.
 
+La page « Vérifier » retrouve un dépôt par numéro de certificat ou en recalculant
+en mémoire l'empreinte SHA-256 d'un fichier. Les QR codes ouvrent cette page avec
+le numéro du certificat prérempli.
+
 Pour lancer l'application :
 
 ```powershell

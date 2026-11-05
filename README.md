@@ -1,6 +1,10 @@
 # Truetone
 Registre de création musicale.
 
+La page « Accueil », affichée par défaut, présente Truetone, ses étapes et les
+statistiques du registre. Les pages « Déposer » et « Vérifier » permettent
+respectivement d'enregistrer un morceau et de contrôler un certificat.
+
 La page « Déposer » calcule l'empreinte SHA-256 des fichiers téléversés en mémoire
 et enregistre chaque dépôt dans `registre.db`. Une empreinte déjà enregistrée
 n'est pas ajoutée une seconde fois : l'application affiche alors le certificat

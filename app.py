@@ -299,6 +299,22 @@ def rechercher_depot_verification(valeur, par_empreinte=False):
         connexion.close()
 
 
+def lire_statistiques_depots():
+    connexion = sqlite3.connect(REGISTRE_DB, timeout=10)
+    try:
+        total, avec_ia = connexion.execute(
+            """
+            SELECT COUNT(*),
+                   COALESCE(SUM(CASE WHEN ia_utilisee = 'oui' THEN 1 ELSE 0 END), 0)
+            FROM depots
+            """
+        ).fetchone()
+        part_ia = avec_ia / total * 100 if total else 0
+        return total, part_ia
+    finally:
+        connexion.close()
+
+
 def afficher_resultat_verification(depot):
     if depot is None:
         st.caption("Aucun enregistrement trouvé")
@@ -320,7 +336,7 @@ def afficher_resultat_verification(depot):
     st.write(f"**Déclaration IA :** {declaration_ia}")
 
 
-st.set_page_config(page_title="Truetone")
+st.set_page_config(page_title="Truetone", layout="wide")
 
 numero_certificat_url = (
     st.query_params.get("certificat", "")
@@ -328,22 +344,150 @@ numero_certificat_url = (
 )
 page_demandee = st.query_params.get("page")
 if "navigation_page" not in st.session_state:
-    if page_demandee in ("Déposer", "Vérifier"):
+    if page_demandee in ("Accueil", "Déposer", "Vérifier"):
         st.session_state.navigation_page = page_demandee
     else:
-        st.session_state.navigation_page = (
-            "Vérifier" if numero_certificat_url else "Déposer"
-        )
+        st.session_state.navigation_page = "Vérifier" if numero_certificat_url else "Accueil"
+
+
+def changer_page(nouvelle_page):
+    st.session_state.navigation_page = nouvelle_page
 
 page = st.sidebar.radio(
     "Navigation",
-    ["Déposer", "Vérifier"],
+    ["Accueil", "Déposer", "Vérifier"],
     key="navigation_page",
 )
 
-st.title(page)
+if page == "Accueil":
+    st.markdown(
+        """
+        <style>
+        .hero {
+            padding: 3rem 0 2.2rem;
+            border-bottom: 1px solid rgba(167, 139, 250, 0.25);
+        }
+        .hero h1 {
+            margin: 0;
+            font-size: clamp(3.5rem, 9vw, 6.5rem);
+            line-height: 1;
+            letter-spacing: -0.07em;
+        }
+        .hero .slogan {
+            max-width: 760px;
+            margin: 1.4rem 0 0;
+            color: #c4b5fd;
+            font-size: clamp(1.2rem, 2.5vw, 1.8rem);
+            line-height: 1.4;
+        }
+        .intro {
+            max-width: 780px;
+            padding: 2rem 0 1rem;
+            color: #d4d4d8;
+            font-size: 1.05rem;
+            line-height: 1.8;
+        }
+        .step-card {
+            min-height: 150px;
+            padding: 1.3rem;
+            border: 1px solid rgba(167, 139, 250, 0.25);
+            border-radius: 12px;
+            background: #17171f;
+        }
+        .step-number {
+            color: #a78bfa;
+            font-size: 0.85rem;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+        }
+        .step-icon {
+            display: grid;
+            width: 2.7rem;
+            height: 2.7rem;
+            margin-top: 1.1rem;
+            place-items: center;
+            border-radius: 10px;
+            background: rgba(139, 92, 246, 0.16);
+            color: #c4b5fd;
+            font-size: 1.5rem;
+        }
+        .step-card h3 {
+            margin: 0.65rem 0 0.35rem;
+            color: #fafafa;
+            font-size: 1.2rem;
+        }
+        .step-card p {
+            margin: 0;
+            color: #a1a1aa;
+        }
+        </style>
+        <section class="hero">
+            <h1>Truetone</h1>
+            <p class="slogan">Chaque artiste peut prouver ce qu'il a créé,
+            chaque auditeur sait ce qu'il écoute</p>
+        </section>
+        <section class="intro">
+            <p>Plus de 50 % des nouvelles sorties sur Deezer sont générées par IA.</p>
+            <p>Dans ce contexte, il devient plus difficile de distinguer les œuvres
+            et de connaître leur origine.</p>
+            <p>Les artistes indépendants ont du mal à prouver leurs créations.</p>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
 
-if page == "Déposer":
+    try:
+        nombre_depots, part_ia = lire_statistiques_depots()
+    except (OSError, sqlite3.Error) as erreur:
+        st.error(f"Impossible de lire les statistiques du registre : {erreur}")
+    else:
+        colonnes_stats = st.columns(2)
+        colonnes_stats[0].metric("Dépôts enregistrés", f"{nombre_depots:,}".replace(",", " "))
+        colonnes_stats[1].metric("Dépôts déclarant de l'IA", f"{part_ia:.1f} %")
+
+    st.subheader("En trois étapes")
+    colonnes_etapes = st.columns(3)
+    etapes_accueil = [
+        ("01", "↓", "Déposez", "Ajoutez votre morceau et ses éléments de création."),
+        ("02", "✳", "Déclarez l'IA", "Indiquez si et comment vous avez utilisé l'IA."),
+        ("03", "✓", "Recevez votre certificat", "Obtenez une preuve horodatée de votre dépôt."),
+    ]
+    for colonne, (numero, icone, titre_etape, description) in zip(
+        colonnes_etapes, etapes_accueil
+    ):
+        with colonne:
+            st.markdown(
+                f"""
+                <div class="step-card">
+                    <span class="step-number">{numero} / 03</span>
+                    <div class="step-icon">{icone}</div>
+                    <h3>{titre_etape}</h3>
+                    <p>{description}</p>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    st.write("")
+    colonnes_actions = st.columns(2)
+    with colonnes_actions[0]:
+        st.button(
+            "Déposer",
+            type="primary",
+            use_container_width=True,
+            on_click=changer_page,
+            args=("Déposer",),
+        )
+    with colonnes_actions[1]:
+        st.button(
+            "Vérifier",
+            use_container_width=True,
+            on_click=changer_page,
+            args=("Vérifier",),
+        )
+
+elif page == "Déposer":
+    st.title(page)
     st.caption("Présentez votre morceau et les fichiers qui documentent sa création.")
 
     ia_utilisee = st.checkbox("J'ai utilisé l'IA", key="ia_utilisee")
@@ -448,6 +592,7 @@ if page == "Déposer":
                         key=f"telecharger_{resultat['numero_certificat']}",
                     )
 elif page == "Vérifier":
+    st.title(page)
     st.subheader("Par numéro de certificat")
     numero_certificat = st.text_input(
         "Numéro du certificat",

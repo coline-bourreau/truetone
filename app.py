@@ -266,7 +266,7 @@ def generer_certificat(resultat):
     )
     qr_size = 35
     pdf.image(qr_buffer, x=(210 - qr_size) / 2, w=qr_size)
-    pdf.ln(qr_size + 4)
+    pdf.ln(4)
     pdf.set_font("helvetica", size=9)
     pdf.multi_cell(
         0,
@@ -403,6 +403,7 @@ if page == "Déposer":
                             f"certificat-{resultat['numero_certificat']}.pdf"
                         ),
                         mime="application/pdf",
+                        on_click="ignore",
                         key=f"telecharger_{resultat['numero_certificat']}",
                     )
 elif page == "Vérifier":
